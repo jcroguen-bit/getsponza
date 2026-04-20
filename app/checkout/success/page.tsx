@@ -34,12 +34,12 @@ export default function SuccessPage() {
             marginBottom: 16,
           }}
         >
-          Your kit is on its way.
+          Your sponsorship pack is ready.
         </h1>
         <p style={{ fontSize: 16, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 36 }}>
-          We&rsquo;re putting the finishing touches on your sponsorship kit. You&rsquo;ll receive
-          your media kit, matched brands, and pitch emails at the email you provided — typically
-          within a few minutes.
+          If you still have your results page open, head back there and the download button should
+          unlock automatically once the payment webhook finishes processing. Pay with the same
+          email you used during analysis so Sponza can match the order to your kit.
         </p>
         <div
           style={{
@@ -53,10 +53,10 @@ export default function SuccessPage() {
         >
           <p style={{ fontSize: 13, fontWeight: 600, color: "var(--gold)", marginBottom: 8 }}>WHAT&rsquo;S INCLUDED</p>
           {[
-            "27 matched brands with decision-maker contacts",
-            "Professional PDF media kit",
-            "5–10 personalized pitch emails",
-            "Full rate card breakdown for your niche",
+            "media_kit.pdf",
+            "pitch_emails.txt with all 8 outreach drafts",
+            "brand_list.csv with contact routes and last-verified dates",
+            "Professional rate card and audience positioning inside the PDF",
           ].map((item) => (
             <div key={item} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <span style={{ color: "var(--gold)" }}>✓</span>

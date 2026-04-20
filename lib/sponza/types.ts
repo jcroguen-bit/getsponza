@@ -80,6 +80,42 @@ export interface SponsorshipKit {
   media_kit_summary: string;
 }
 
+export interface FreeSponsorshipKitPreview {
+  readiness_score: number;
+  readiness_label: string;
+  readiness_insights: string[];
+  creator_profile: CreatorProfile;
+  rate_card: {
+    range_low: number;
+    range_high: number;
+  };
+  brand_matches: BrandMatch[];
+  brand_matches_remaining: number;
+  pitch_emails: Array<Pick<PitchEmail, "brand" | "subject" | "body">>;
+  media_kit_summary: string;
+}
+
+export interface KitResponseMeta {
+  kit_id: number;
+  last_analyzed: string;
+  cached: boolean;
+  pack_ready_at: string | null;
+}
+
+export type PaidKitResponse = SponsorshipKit &
+  KitResponseMeta & {
+    access_tier: "paid";
+    download_ready: true;
+  };
+
+export type FreeKitResponse = FreeSponsorshipKitPreview &
+  KitResponseMeta & {
+    access_tier: "free";
+    download_ready: false;
+  };
+
+export type GenerateKitResponse = PaidKitResponse | FreeKitResponse;
+
 export interface GenerateKitInput {
   url: string;
   email?: string;
@@ -90,8 +126,12 @@ export interface KitRecord {
   id: number;
   platform: Platform;
   email: string | null;
+  url: string;
+  normalized_url: string | null;
   created_at: string;
   paid_at: string | null;
+  pack_ready_at: string | null;
+  pack_last_error: string | null;
   full_kit_json: SponsorshipKit;
   scrape_json: ScrapeResult | null;
 }

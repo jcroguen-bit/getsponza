@@ -51,6 +51,8 @@ export async function ensureDatabase() {
         scrape_json JSONB,
         full_kit_json JSONB NOT NULL,
         paid_at TIMESTAMPTZ,
+        pack_ready_at TIMESTAMPTZ,
+        pack_last_error TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
@@ -97,6 +99,8 @@ export async function ensureDatabase() {
       ADD COLUMN IF NOT EXISTS email TEXT,
       ADD COLUMN IF NOT EXISTS scrape_json JSONB,
       ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS pack_ready_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS pack_last_error TEXT,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
     `);
 

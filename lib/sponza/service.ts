@@ -1,7 +1,13 @@
 import { getPool } from "@/lib/db";
 import { generateSponsorshipKit } from "@/lib/sponza/llm";
 import { buildFallbackScrape, scrapeCreator } from "@/lib/sponza/scrape";
-import type { GenerateKitInput, KitRecord, SponsorshipKit } from "@/lib/sponza/types";
+import type {
+  FreeSponsorshipKitPreview,
+  GenerateKitInput,
+  GenerateKitResponse,
+  KitRecord,
+  SponsorshipKit,
+} from "@/lib/sponza/types";
 import {
   detectPlatform,
   hashValue,
@@ -12,7 +18,7 @@ import {
 
 const CACHE_WINDOW_DAYS = 90;
 
-function buildFreeResponse(kit: SponsorshipKit) {
+function buildFreeResponse(kit: SponsorshipKit): FreeSponsorshipKitPreview {
   const firstPitch = kit.pitch_emails[0];
 
   return {
@@ -85,7 +91,18 @@ async function getCachedKit(cacheKey: string): Promise<KitRecord | null> {
   const db = getPool();
   const result = await db.query<KitRecord>(
     `
-      SELECT id, platform, email, created_at::text, paid_at::text, full_kit_json, scrape_json
+      SELECT
+        id,
+        platform,
+        email,
+        url,
+        normalized_url,
+        created_at::text,
+        paid_at::text,
+        pack_ready_at::text,
+        pack_last_error,
+        full_kit_json,
+        scrape_json
       FROM sponsorship_kits
       WHERE cache_key = $1
         AND created_at >= NOW() - INTERVAL '${CACHE_WINDOW_DAYS} days'
@@ -162,9 +179,22 @@ async function saveKitRecord(params: {
         scrape_json = EXCLUDED.scrape_json,
         full_kit_json = EXCLUDED.full_kit_json,
         paid_at = COALESCE(sponsorship_kits.paid_at, EXCLUDED.paid_at),
+        pack_ready_at = NULL,
+        pack_last_error = NULL,
         created_at = NOW(),
         updated_at = NOW()
-      RETURNING id, platform, email, created_at::text, paid_at::text, full_kit_json, scrape_json
+      RETURNING
+        id,
+        platform,
+        email,
+        url,
+        normalized_url,
+        created_at::text,
+        paid_at::text,
+        pack_ready_at::text,
+        pack_last_error,
+        full_kit_json,
+        scrape_json
     `,
     [
       params.url,
@@ -186,16 +216,21 @@ async function saveKitRecord(params: {
 
 function withResponseMeta<T extends object>(
   payload: T,
+  kitId: number,
   accessTier: "free" | "paid",
   createdAt: string,
-  cached: boolean
-) {
+  cached: boolean,
+  packReadyAt: string | null
+): GenerateKitResponse {
   return {
     ...payload,
+    kit_id: kitId,
     access_tier: accessTier,
     cached,
     last_analyzed: createdAt,
-  };
+    download_ready: accessTier === "paid",
+    pack_ready_at: packReadyAt,
+  } as unknown as GenerateKitResponse;
 }
 
 export async function generateKitResponse(input: GenerateKitInput) {
@@ -217,7 +252,14 @@ export async function generateKitResponse(input: GenerateKitInput) {
       ? cachedKit.full_kit_json
       : buildFreeResponse(cachedKit.full_kit_json);
 
-    return withResponseMeta(payload, paidUnlock ? "paid" : "free", cachedKit.created_at, true);
+    return withResponseMeta(
+      payload,
+      cachedKit.id,
+      paidUnlock ? "paid" : "free",
+      cachedKit.created_at,
+      true,
+      cachedKit.pack_ready_at
+    );
   }
 
   let scrapeResult;
@@ -276,7 +318,14 @@ export async function generateKitResponse(input: GenerateKitInput) {
   });
 
   const payload = paidUnlock ? fullKit : buildFreeResponse(fullKit);
-  return withResponseMeta(payload, paidUnlock ? "paid" : "free", savedRecord.created_at, false);
+  return withResponseMeta(
+    payload,
+    savedRecord.id,
+    paidUnlock ? "paid" : "free",
+    savedRecord.created_at,
+    false,
+    savedRecord.pack_ready_at
+  );
 }
 
 export async function recordPaymentUnlock(params: {
@@ -317,4 +366,133 @@ export async function recordPaymentUnlock(params: {
   );
 
   return true;
+}
+
+async function markKitPaid(kitId: number) {
+  const db = getPool();
+  await db.query(
+    `
+      UPDATE sponsorship_kits
+      SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
+      WHERE id = $1
+    `,
+    [kitId]
+  );
+}
+
+export async function getKitRecordById(kitId: number) {
+  const db = getPool();
+  const result = await db.query<KitRecord>(
+    `
+      SELECT
+        id,
+        platform,
+        email,
+        url,
+        normalized_url,
+        created_at::text,
+        paid_at::text,
+        pack_ready_at::text,
+        pack_last_error,
+        full_kit_json,
+        scrape_json
+      FROM sponsorship_kits
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [kitId]
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function getPaidKitRecordById(kitId: number) {
+  const kit = await getKitRecordById(kitId);
+
+  if (!kit) {
+    return null;
+  }
+
+  const unlocked = kit.paid_at !== null || (await hasPaidUnlock(kit.email));
+
+  if (!unlocked) {
+    return null;
+  }
+
+  if (!kit.paid_at) {
+    await markKitPaid(kit.id);
+    kit.paid_at = new Date().toISOString();
+  }
+
+  return kit;
+}
+
+export async function getLatestPaidKitForEmail(email?: string | null) {
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const db = getPool();
+  const result = await db.query<KitRecord>(
+    `
+      SELECT
+        id,
+        platform,
+        email,
+        url,
+        normalized_url,
+        created_at::text,
+        paid_at::text,
+        pack_ready_at::text,
+        pack_last_error,
+        full_kit_json,
+        scrape_json
+      FROM sponsorship_kits
+      WHERE LOWER(email) = LOWER($1)
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [normalizedEmail]
+  );
+
+  const kit = result.rows[0] || null;
+
+  if (!kit) {
+    return null;
+  }
+
+  if (!kit.paid_at) {
+    const unlocked = await hasPaidUnlock(normalizedEmail);
+
+    if (!unlocked) {
+      return null;
+    }
+
+    await markKitPaid(kit.id);
+    kit.paid_at = new Date().toISOString();
+  }
+
+  return kit;
+}
+
+export async function updateKitPackStatus(params: {
+  kitId: number;
+  ready: boolean;
+  error?: string | null;
+}) {
+  const db = getPool();
+
+  await db.query(
+    `
+      UPDATE sponsorship_kits
+      SET
+        pack_ready_at = CASE WHEN $2 THEN NOW() ELSE pack_ready_at END,
+        pack_last_error = CASE WHEN $2 THEN NULL ELSE $3 END,
+        updated_at = NOW()
+      WHERE id = $1
+    `,
+    [params.kitId, params.ready, params.error || null]
+  );
 }

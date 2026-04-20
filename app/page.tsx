@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const PAYMENT_LINK = "https://buy.stripe.com/00w9AUdhO7uT0Yi64zeP03a";
+const PAYMENT_LINK = "https://buy.stripe.com/aFaeVe3He16v6iC2SneP03g";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function StarRating() {
   return (
@@ -20,6 +21,8 @@ function StarRating() {
 export default function HomePage() {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [email, setEmail] = useState("");
+  const [nicheNotes, setNicheNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -30,17 +33,39 @@ export default function HomePage() {
       setError("Please enter your channel URL.");
       return;
     }
+
+    if (email.trim() && !EMAIL_PATTERN.test(email.trim())) {
+      setError("Enter a valid email if you want Sponza to unlock your paid pack automatically.");
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
       await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({
+          url: url.trim(),
+          email: email.trim() || undefined,
+          niche_notes: nicheNotes.trim() || undefined,
+        }),
       });
     } catch {}
     setTimeout(() => {
-      router.push(`/results?url=${encodeURIComponent(url.trim())}`);
+      const nextParams = new URLSearchParams({
+        url: url.trim(),
+      });
+
+      if (email.trim()) {
+        nextParams.set("email", email.trim().toLowerCase());
+      }
+
+      if (nicheNotes.trim()) {
+        nextParams.set("niche", nicheNotes.trim());
+      }
+
+      router.push(`/results?${nextParams.toString()}`);
     }, 800);
   };
 
@@ -229,55 +254,100 @@ export default function HomePage() {
           <form onSubmit={handleSubmit} className="fade-in fade-in-delay-4" style={{ marginBottom: 24 }}>
             <div
               style={{
-                display: "flex",
-                gap: 8,
+                display: "grid",
+                gap: 10,
                 background: "rgba(255,255,255,0.05)",
                 border: "1.5px solid rgba(255,255,255,0.12)",
-                borderRadius: 14,
-                padding: 6,
-                maxWidth: 620,
+                borderRadius: 18,
+                padding: 10,
+                maxWidth: 760,
                 margin: "0 auto",
-                flexWrap: "wrap",
               }}
             >
-              <input
-                type="text"
-                placeholder="youtube.com/c/yourchannel  or  instagram.com/yourhandle"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="youtube.com/c/yourchannel  or  instagram.com/yourhandle"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    color: "var(--warm-white)",
+                    fontSize: 15,
+                    padding: "12px 16px",
+                    minWidth: 200,
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    background: loading ? "rgba(245,166,35,0.6)" : "var(--gold)",
+                    color: "var(--navy)",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 28px",
+                    fontWeight: 700,
+                    fontSize: 15,
+                    cursor: loading ? "wait" : "pointer",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {loading ? "Analyzing…" : "Get My Free Score →"}
+                </button>
+              </div>
+
+              <div
                 style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "var(--warm-white)",
-                  fontSize: 15,
-                  padding: "12px 16px",
-                  minWidth: 200,
-                }}
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  background: loading ? "rgba(245,166,35,0.6)" : "var(--gold)",
-                  color: "var(--navy)",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "12px 28px",
-                  fontWeight: 700,
-                  fontSize: 15,
-                  cursor: loading ? "wait" : "pointer",
-                  whiteSpace: "nowrap",
-                  letterSpacing: "-0.01em",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: 10,
                 }}
               >
-                {loading ? "Analyzing…" : "Get My Free Score →"}
-              </button>
+                <input
+                  type="email"
+                  placeholder="Email for paid unlocks (optional)"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 12,
+                    outline: "none",
+                    color: "var(--warm-white)",
+                    fontSize: 14,
+                    padding: "12px 14px",
+                    width: "100%",
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Optional niche notes: e.g. skincare routines, budget travel, endurance training"
+                  value={nicheNotes}
+                  onChange={(e) => setNicheNotes(e.target.value)}
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 12,
+                    outline: "none",
+                    color: "var(--warm-white)",
+                    fontSize: 14,
+                    padding: "12px 14px",
+                    width: "100%",
+                  }}
+                />
+              </div>
             </div>
             {error && (
               <p style={{ color: "#FF6B6B", fontSize: 13, marginTop: 8 }}>{error}</p>
             )}
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10 }}>
+              Add the same email you&rsquo;ll use at checkout if you want the paid sponsorship pack to unlock on the results page automatically.
+            </p>
           </form>
 
           {/* Trust signals */}
