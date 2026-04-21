@@ -1,12 +1,12 @@
 # GetSponza — Codebase Documentation
 
 ## Overview
-GetSponza is a creator sponsorship tool. Users paste their channel URL, get a free Sponsorship Readiness Score, and can unlock a paid sponsorship kit or a lower-cost refresh via Stripe-hosted one-time checkout.
+GetSponza is a creator sponsorship tool. Users paste their channel URL, get a free Sponsorship Readiness Score, and can unlock a paid sponsorship kit or a lower-cost refresh via NanoCorp's hosted payment link plus a manual email-based unlock flow on the results page.
 
 ## Tech Stack
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS
 - PostgreSQL (Neon DB) via `pg` package
-- Stripe Checkout via the `stripe` SDK
+- NanoCorp hosted Stripe payment link
 - Resend for transactional email
 - Deployed on Vercel at https://sponza.nanocorp.app
 
@@ -18,27 +18,25 @@ app/
   page.tsx                — Landing page hero form now calls `/api/generate-kit` directly and routes to `/results/[kit_id]`
   results/page.tsx        — Compatibility wrapper for legacy query-string result links
   results/results-client.tsx — Legacy bootstrap client that upgrades `/results?url=...` into a persistent `/results/[kit_id]` route
-  results/[kitId]/page.tsx — Dynamic result route keyed by the persisted kit ID
-  results/[kitId]/results-detail-client.tsx — DB-backed results UI with checkout, unlock polling, download, and refresh states
-  api/create-checkout/route.ts — POST endpoint that creates a Stripe Checkout Session for a specific kit row
+  results/[kitId]/page.tsx — Dynamic result route keyed by the persisted kit ID, with optional `?unlock=1` state for refresh handoff
+  results/[kitId]/results-detail-client.tsx — DB-backed results UI with direct payment-link CTAs, manual unlock, download, and refresh states
   api/generate-kit/route.ts — POST endpoint — scrape, cache, gate, and return sponsorship kit output
   api/generate-pdf/route.ts — POST endpoint — returns the designed paid media kit PDF for a `kit_id`
   api/kits/[kitId]/route.ts — GET endpoint that returns the current gated paid/free view for one kit record
   api/refresh-kit/route.ts — POST endpoint that creates a new refresh kit from an eligible paid kit
+  api/unlock-kit/route.ts — POST endpoint that validates `{ kit_id, email }`, marks the exact kit paid, primes the pack, and sends the confirmation email
   api/download-pack/route.ts — POST endpoint — returns the paid sponsorship-pack ZIP (`media_kit.pdf`, `pitch_emails.txt`, `brand_list.csv`)
   api/submit/route.ts     — POST endpoint — stores URL submission in Neon DB
-  api/webhooks/stripe/route.ts — Stripe webhook handler for `checkout.session.completed` keyed by `metadata.kit_id`
-  api/webhooks/nanocorp/route.ts — Legacy NanoCorp webhook path kept for backward compatibility
-  checkout/success/page.tsx — Post-payment thank-you page with instructions to return to the results page for download
+  api/webhooks/nanocorp/route.ts — Acknowledges NanoCorp webhook delivery without auto-unlocking kits in the MVP manual flow
+  checkout/success/page.tsx — Post-payment thank-you page that sends users back to the results-page unlock form
 lib/
-  stripe.ts               — Shared Stripe client bootstrap
   db.ts                   — Shared Neon `pg` pool + table bootstrap for submissions, kits, unlocks, failures
-  sponza/commerce.ts      — Price constants, purchase type helpers, and refresh timing helpers
+  sponza/commerce.ts      — Price constants, the shared NanoCorp payment link, and refresh timing helpers
   sponza/email.ts         — Resend helper for “kit ready” confirmation emails
   sponza/utils.ts         — URL normalization, platform detection, hashing, parsing helpers
   sponza/scrape.ts        — YouTube API scraper + Instagram/TikTok public metadata fallbacks
   sponza/llm.ts           — Single GPT-4o JSON-schema prompt for full sponsorship kit generation
-  sponza/service.ts       — Cache lookup, kit creation, DB-backed gating by `kit_id`, Stripe payment persistence, and refresh creation
+  sponza/service.ts       — Cache lookup, kit creation, DB-backed gating by `kit_id`, paid-state persistence, manual unlock helpers, and refresh creation
   sponza/deliverables.tsx — Server-side PDF rendering and sponsorship-pack ZIP assembly
 ```
 
@@ -49,24 +47,29 @@ lib/
 
 ## Database
 - Table: `submissions (id, url, email, platform, created_at)`
-- Table: `sponsorship_kits (url_hash, niche_hash, cache_key, platform, full_kit_json, scrape_json, email, paid_at, stripe_payment_id, stripe_checkout_session_id, refresh_source_kit_id, pack_ready_at, pack_last_error, created_at, updated_at)`
+- Table: `sponsorship_kits (url_hash, niche_hash, cache_key, platform, full_kit_json, scrape_json, email, paid, paid_at, stripe_payment_id, stripe_checkout_session_id, refresh_source_kit_id, pack_ready_at, pack_last_error, created_at, updated_at)`
 - Table: `payment_unlocks (kit_id, email, amount_cents, currency, stripe_session_id, stripe_payment_id, created_at, updated_at)`
 - Table: `kit_failures (url, email, platform, cache_key, step, error_message, details, created_at)`
 - Auto-created on first API hit via shared `ensureDatabase()` in [`lib/db.ts`](/home/worker/repo/lib/db.ts)
 - `DATABASE_URL` is set as a protected env var on Vercel
 - Cache key is `sha256(normalized_url + "::" + normalized_niche_notes)` and reuses kits for 90 days
 - The cache-key index is now non-unique so a 90-day refresh can create a brand-new kit row while still reusing recent kits
+- `ensureDatabase()` now backfills `paid = true` for any existing row that already had `paid_at IS NOT NULL`
 
 ## Payment
-- `POST /api/create-checkout` creates a Stripe Checkout Session for a specific `kit_id`
-- One-time full-kit checkout price: $29
-- One-time refresh checkout price: $19
-- Checkout success redirects to `/results/[kit_id]?paid=true`
-- Checkout cancellation redirects to `/results/[kit_id]`
-- `POST /api/webhooks/stripe` verifies the Stripe signature, marks the matching kit row paid, records Stripe IDs, primes the PDF, and sends the Resend confirmation email
-- Paid gating is now verified from the `sponsorship_kits` row itself, not from a query param and not from email-only unlock state
+- Both the full-kit CTA and refresh purchase now use the shared NanoCorp payment link `https://buy.stripe.com/7sYfZielSbL9eP878DeP33I`
+- `POST /api/unlock-kit` is the MVP unlock mechanism: it validates `{ kit_id, email }`, confirms the email matches the stored kit record, sets `paid = true`, keeps `paid_at`, primes the PDF/ZIP artifacts, and sends the existing Resend confirmation email
+- The payment link opens in a new tab; unlock happens from the results page rather than from a payment webhook
+- `POST /api/webhooks/nanocorp` now acknowledges deliveries but intentionally does not auto-unlock kits
+- Paid gating is verified from the `sponsorship_kits` row itself, keyed by `kit_id`
 
 ## Recent Changes
+- 2026-04-21: Installed project dependencies so the bundled Next 16 docs were available locally, then read [`node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md), [`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md), and [`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/dynamic-routes.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/dynamic-routes.md) before changing the results route params and adding the new unlock route.
+- 2026-04-21: Replaced the custom Stripe checkout flow with NanoCorp's shared payment link across [`app/results/[kitId]/results-detail-client.tsx`](/home/worker/repo/app/results/[kitId]/results-detail-client.tsx), removed [`app/api/create-checkout/route.ts`](/home/worker/repo/app/api/create-checkout/route.ts), removed [`app/api/webhooks/stripe/route.ts`](/home/worker/repo/app/api/webhooks/stripe/route.ts), removed [`lib/stripe.ts`](/home/worker/repo/lib/stripe.ts), and removed the `stripe` package from [`package.json`](/home/worker/repo/package.json).
+- 2026-04-21: Added manual unlock handling in [`app/api/unlock-kit/route.ts`](/home/worker/repo/app/api/unlock-kit/route.ts) and [`lib/sponza/service.ts`](/home/worker/repo/lib/sponza/service.ts), including exact-kit email matching, `paid` boolean persistence/backfill, on-demand pack priming, and moving the Resend confirmation email trigger from the old Stripe webhook to the unlock route.
+- 2026-04-21: Updated [`app/api/webhooks/nanocorp/route.ts`](/home/worker/repo/app/api/webhooks/nanocorp/route.ts) to acknowledge webhook delivery without auto-unlocking kits, which keeps the new MVP flow manual even if NanoCorp forwards payment events.
+- 2026-04-21: Updated the results-page UX and post-payment copy across [`app/results/[kitId]/page.tsx`](/home/worker/repo/app/results/[kitId]/page.tsx), [`app/results/[kitId]/results-detail-client.tsx`](/home/worker/repo/app/results/[kitId]/results-detail-client.tsx), [`app/page.tsx`](/home/worker/repo/app/page.tsx), and [`app/checkout/success/page.tsx`](/home/worker/repo/app/checkout/success/page.tsx) so users pay in a new tab, then return to unlock via the “Already paid?” email form.
+- 2026-04-21: Verified `npm run lint` and `npm run build` pass after the NanoCorp payment-link/manual-unlock refactor.
 - 2026-04-21: Audited the full repo for branded copy before a rename sweep, read the bundled Next 16 metadata/layout docs at [`node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md), [`node_modules/next/dist/docs/01-app/01-getting-started/14-metadata-and-og-images.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/01-getting-started/14-metadata-and-og-images.md), and [`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/layout.md`](/home/worker/repo/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/layout.md), and confirmed the rename should touch user-facing copy, metadata, email sender/copy, Stripe product labels, branded download filenames, and LLM prompt text while leaving internal module paths like `lib/sponza/*` and the live `sponza.nanocorp.app` deployment URL unchanged.
 - 2026-04-21: Standardized visible brand references on `GetSponza` across [`app/layout.tsx`](/home/worker/repo/app/layout.tsx), [`app/page.tsx`](/home/worker/repo/app/page.tsx), [`app/results/results-client.tsx`](/home/worker/repo/app/results/results-client.tsx), [`app/results/[kitId]/results-detail-client.tsx`](/home/worker/repo/app/results/[kitId]/results-detail-client.tsx), [`app/checkout/success/page.tsx`](/home/worker/repo/app/checkout/success/page.tsx), [`app/api/create-checkout/route.ts`](/home/worker/repo/app/api/create-checkout/route.ts), and [`lib/sponza/llm.ts`](/home/worker/repo/lib/sponza/llm.ts); updated the footer/contact email to `sponza@nanocorp.app`; and changed the branded ZIP download name to `getsponza-sponsorship-pack.zip`.
 - 2026-04-21: Recreated the active NanoCorp Stripe catalog under the new brand because the CLI does not expose a product-update command: created `GetSponza Sponsorship Kit` (`3a093915-aedc-42dd-9c9d-60bb8b1b2ff6`) and `GetSponza Kit Refresh` (`9b2c68e5-c664-4f8b-856e-4e0e11e8524a`) with updated descriptions, deactivated the old branded products, and confirmed the shared active payment link is now `https://buy.stripe.com/7sYfZielSbL9eP878DeP33I`.
@@ -112,20 +115,21 @@ lib/
 
 ## Environment Notes
 - Local shell currently has `DATABASE_URL` set.
-- Local shell currently does **not** have `OPENAI_API_KEY`, `YOUTUBE_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, or `RESEND_API_KEY` set.
-- Because the Stripe and Resend env vars are absent locally, the actual hosted checkout session creation, webhook signature verification, and outbound confirmation email were implemented but not exercised end-to-end in this session.
+- Local shell currently does **not** have `OPENAI_API_KEY`, `YOUTUBE_API_KEY`, or `RESEND_API_KEY` set.
+- Required env vars after the payment-link refactor are now exactly: `OPENAI_API_KEY`, `YOUTUBE_API_KEY`, `DATABASE_URL`, and `RESEND_API_KEY`.
+- Because only `DATABASE_URL` is present locally, the manual unlock route, generation routes, and build were verified structurally, but live AI generation and real outbound confirmation emails were not exercised end-to-end in this session.
 
 ## Results Page
 - Canonical route is now `/results/[kit_id]`
 - The page fetches `/api/kits/[kit_id]` so it always reflects the DB’s paid/free state for that exact kit row
 - Free kits show the Readiness Score plus blurred paid sections and a `Get Your Full Kit — $29` CTA
-- If the page was loaded with `?paid=true` and the DB is still unpaid, the UI shows a “confirming payment” state and polls until the webhook lands
+- Clicking the payment CTA opens the NanoCorp payment link in a new tab and reveals the secondary “Already paid?” email unlock form on the same page
 - Paid kits show the full content plus `Download Your Sponsorship Pack`
-- Paid kits also show the 90-day refresh card, which only enables checkout once `created_at + 90 days` has passed
+- Paid kits also show the 90-day refresh card; once eligible, it creates a brand-new refresh kit, routes to `/results/[new_kit_id]?unlock=1`, and opens the same payment link in a new tab
 
 ## Next Steps (Follow-up Tasks)
-1. **Live Stripe + Resend config** — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and `RESEND_API_KEY` in Vercel, then register the Stripe webhook endpoint against `/api/webhooks/stripe`.
-2. **End-to-end payment QA** — run one real test purchase from `/results/[kit_id]`, confirm the redirect returns to the correct kit, and verify the webhook stores `stripe_payment_id` / `stripe_checkout_session_id`.
-3. **Refresh QA with real generation** — after `OPENAI_API_KEY` and `YOUTUBE_API_KEY` are set, validate that `/api/refresh-kit` creates a brand-new kit row and that the $19 checkout unlocks the refreshed row.
+1. **Real payment QA** — run one real purchase through the shared payment link from `/results/[kit_id]`, then verify `/api/unlock-kit` unlocks the correct kit only when the stored email matches.
+2. **Refresh QA with live generation** — after `OPENAI_API_KEY` and `YOUTUBE_API_KEY` are set, validate that `/api/refresh-kit` creates a brand-new kit row and that the `$19` refresh path lands on the new kit page with the unlock prompt visible.
+3. **Fraud hardening** — replace the MVP email-match unlock with a stronger payment reconciliation flow once revenue justifies a dedicated checkout/webhook setup or a signed payment reference.
 4. **Artifact persistence** — decide whether paid packs should remain on-demand only or be stored in Blob storage with signed URLs for faster repeat downloads and support workflows.
-5. **Legacy cleanup** — once production traffic is off the old NanoCorp flow, remove [`app/api/webhooks/nanocorp/route.ts`](/home/worker/repo/app/api/webhooks/nanocorp/route.ts), [`app/api/submit/route.ts`](/home/worker/repo/app/api/submit/route.ts), and any remaining compatibility logic around `/results`.
+5. **Legacy cleanup** — once production traffic no longer needs the compatibility paths, remove [`app/api/webhooks/nanocorp/route.ts`](/home/worker/repo/app/api/webhooks/nanocorp/route.ts), [`app/api/submit/route.ts`](/home/worker/repo/app/api/submit/route.ts), and any remaining compatibility logic around `/results`.

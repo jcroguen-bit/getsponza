@@ -137,6 +137,7 @@ export interface KitRecord {
   niche_notes: string | null;
   cache_key: string | null;
   created_at: string;
+  paid: boolean;
   paid_at: string | null;
   pack_ready_at: string | null;
   pack_last_error: string | null;

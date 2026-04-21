@@ -50,6 +50,7 @@ export async function ensureDatabase() {
         email TEXT,
         scrape_json JSONB,
         full_kit_json JSONB NOT NULL,
+        paid BOOLEAN NOT NULL DEFAULT FALSE,
         paid_at TIMESTAMPTZ,
         stripe_payment_id TEXT,
         stripe_checkout_session_id TEXT,
@@ -103,6 +104,7 @@ export async function ensureDatabase() {
       ADD COLUMN IF NOT EXISTS cache_key TEXT,
       ADD COLUMN IF NOT EXISTS email TEXT,
       ADD COLUMN IF NOT EXISTS scrape_json JSONB,
+      ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS stripe_payment_id TEXT,
       ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT,
@@ -128,6 +130,13 @@ export async function ensureDatabase() {
       ADD COLUMN IF NOT EXISTS platform TEXT,
       ADD COLUMN IF NOT EXISTS cache_key TEXT,
       ADD COLUMN IF NOT EXISTS details JSONB
+    `);
+
+    await db.query(`
+      UPDATE sponsorship_kits
+      SET paid = TRUE
+      WHERE paid = FALSE
+        AND paid_at IS NOT NULL
     `);
 
     await db.query(`

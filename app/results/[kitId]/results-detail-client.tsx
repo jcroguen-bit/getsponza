@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { NANO_PAYMENT_LINK } from "@/lib/sponza/commerce";
 import type { GenerateKitResponse } from "@/lib/sponza/types";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -87,7 +89,7 @@ function ScoreGauge({ score }: { score: number }) {
   );
 }
 
-function LockedOverlay({ ctaLabel, onUnlock, pending }: { ctaLabel: string; onUnlock: () => void; pending: boolean }) {
+function LockedOverlay({ ctaLabel, onPaymentClick }: { ctaLabel: string; onPaymentClick: () => void }) {
   return (
     <div
       style={{
@@ -107,21 +109,25 @@ function LockedOverlay({ ctaLabel, onUnlock, pending }: { ctaLabel: string; onUn
         <p style={{ color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 16 }}>
           Unlock the sponsor-ready pack to remove the blur and download the PDF, pitch emails, and full brand list.
         </p>
-        <button
-          onClick={onUnlock}
-          disabled={pending}
+        <a
+          href={NANO_PAYMENT_LINK}
+          target="_blank"
+          rel="noreferrer"
+          onClick={onPaymentClick}
           style={{
+            display: "inline-block",
             border: "none",
             borderRadius: 999,
             background: "var(--gold)",
             color: "var(--navy)",
             fontWeight: 800,
             padding: "13px 18px",
-            cursor: pending ? "wait" : "pointer",
+            cursor: "pointer",
+            textDecoration: "none",
           }}
         >
-          {pending ? "Redirecting..." : ctaLabel}
-        </button>
+          {ctaLabel}
+        </a>
       </div>
     </div>
   );
@@ -129,22 +135,22 @@ function LockedOverlay({ ctaLabel, onUnlock, pending }: { ctaLabel: string; onUn
 
 export default function ResultsDetailClient({
   kitId,
-  returnedFromCheckout,
+  initialUnlockPromptOpen,
 }: {
   kitId: number;
-  returnedFromCheckout: boolean;
+  initialUnlockPromptOpen: boolean;
 }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [state, setState] = useState<FetchState>({ loading: true, error: "", data: null });
-  const [checkoutPending, setCheckoutPending] = useState(false);
   const [downloadPending, setDownloadPending] = useState(false);
   const [refreshPending, setRefreshPending] = useState(false);
+  const [unlockPending, setUnlockPending] = useState(false);
+  const [showUnlockPrompt, setShowUnlockPrompt] = useState(initialUnlockPromptOpen);
   const [manualReloadTick, setManualReloadTick] = useState(0);
 
-  const fetchKit = async (silent = false) => {
-    if (!silent) {
-      setState((current) => ({ ...current, loading: true, error: "" }));
-    }
+  const fetchKit = async () => {
+    setState((current) => ({ ...current, loading: true, error: "" }));
 
     try {
       const response = await fetch(`/api/kits/${kitId}`, {
@@ -173,58 +179,47 @@ export default function ResultsDetailClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kitId, manualReloadTick]);
 
-  useEffect(() => {
-    if (state.data?.access_tier === "paid") {
-      return;
-    }
+  const revealUnlockPrompt = () => {
+    setShowUnlockPrompt(true);
+    setState((current) => ({ ...current, error: "" }));
+  };
 
-    if (!returnedFromCheckout && !state.data?.email) {
-      return;
-    }
+  const handleManualUnlock = async () => {
+    const unlockEmail = email.trim().toLowerCase();
 
-    const interval = window.setInterval(() => {
-      void fetchKit(true);
-    }, returnedFromCheckout ? 4000 : 12000);
-
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [returnedFromCheckout, state.data?.access_tier, state.data?.email, kitId]);
-
-  const handleCheckout = async (targetKitId = kitId) => {
-    const checkoutEmail = email.trim().toLowerCase();
-
-    if (!checkoutEmail || !EMAIL_PATTERN.test(checkoutEmail)) {
+    if (!unlockEmail || !EMAIL_PATTERN.test(unlockEmail)) {
       setState((current) => ({
         ...current,
-        error: "Enter a valid email before checkout so GetSponza can send your unlock confirmation.",
+        error: "Enter the same email you used for this kit before unlocking.",
       }));
       return;
     }
 
-    setCheckoutPending(true);
+    setUnlockPending(true);
 
     try {
-      const response = await fetch("/api/create-checkout", {
+      const response = await fetch("/api/unlock-kit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          kit_id: targetKitId,
-          email: checkoutEmail,
+          kit_id: kitId,
+          email: unlockEmail,
         }),
       });
-      const payload = (await response.json()) as { error?: string; url?: string };
+      const payload = (await response.json()) as GenerateKitResponse & { error?: string };
 
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.error || "Failed to create checkout session");
+      if (!response.ok || payload.access_tier !== "paid") {
+        throw new Error(payload.error || "Failed to unlock this kit");
       }
 
-      window.location.assign(payload.url);
+      setState({ loading: false, error: "", data: payload });
     } catch (error) {
       setState((current) => ({
         ...current,
-        error: error instanceof Error ? error.message : "Failed to create checkout session",
+        error: error instanceof Error ? error.message : "Failed to unlock this kit",
       }));
-      setCheckoutPending(false);
+    } finally {
+      setUnlockPending(false);
     }
   };
 
@@ -262,6 +257,7 @@ export default function ResultsDetailClient({
 
   const handleRefreshPurchase = async () => {
     setRefreshPending(true);
+    const paymentWindow = window.open("", "_blank");
 
     try {
       const response = await fetch("/api/refresh-kit", {
@@ -275,8 +271,15 @@ export default function ResultsDetailClient({
         throw new Error(payload.error || "Failed to create refresh kit");
       }
 
-      await handleCheckout(payload.kit_id);
+      if (paymentWindow && !paymentWindow.closed) {
+        paymentWindow.location.href = NANO_PAYMENT_LINK;
+      } else {
+        window.open(NANO_PAYMENT_LINK, "_blank", "noopener,noreferrer");
+      }
+
+      router.push(`/results/${payload.kit_id}?unlock=1`);
     } catch (error) {
+      paymentWindow?.close();
       setState((current) => ({
         ...current,
         error: error instanceof Error ? error.message : "Failed to create refresh kit",
@@ -342,10 +345,13 @@ export default function ResultsDetailClient({
               {downloadPending ? "Preparing Pack..." : "Download Your Sponsorship Pack"}
             </button>
           ) : (
-            <button
-              onClick={() => void handleCheckout()}
-              disabled={checkoutPending}
+            <a
+              href={NANO_PAYMENT_LINK}
+              target="_blank"
+              rel="noreferrer"
+              onClick={revealUnlockPrompt}
               style={{
+                display: "inline-block",
                 background: "var(--gold)",
                 color: "var(--navy)",
                 borderRadius: 999,
@@ -353,11 +359,12 @@ export default function ResultsDetailClient({
                 padding: "11px 20px",
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: checkoutPending ? "wait" : "pointer",
+                cursor: "pointer",
+                textDecoration: "none",
               }}
             >
-              {checkoutPending ? "Redirecting..." : checkoutLabel}
-            </button>
+              {checkoutLabel}
+            </a>
           )}
         </div>
       </nav>
@@ -396,7 +403,7 @@ export default function ResultsDetailClient({
                 letterSpacing: "0.08em",
               }}
             >
-              {isPaid ? "FULL KIT UNLOCKED" : returnedFromCheckout ? "CONFIRMING PAYMENT" : "FREE READINESS SCORE"}
+              {isPaid ? "FULL KIT UNLOCKED" : showUnlockPrompt ? "READY TO UNLOCK" : "FREE READINESS SCORE"}
             </div>
 
             <h1
@@ -412,7 +419,7 @@ export default function ResultsDetailClient({
             </h1>
 
             <p style={{ maxWidth: 620, fontSize: 16, lineHeight: 1.7, color: "var(--text-muted)", marginBottom: 24 }}>
-              GetSponza analyzed this creator profile, surfaced the free readiness score, and can unlock the full sponsor-ready pack after checkout.
+              GetSponza analyzed this creator profile, surfaced the free readiness score, and can unlock the full sponsor-ready pack after payment.
             </p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 26 }}>
@@ -450,21 +457,6 @@ export default function ResultsDetailClient({
               </div>
             ) : null}
 
-            {returnedFromCheckout && !isPaid ? (
-              <div
-                style={{
-                  borderRadius: 18,
-                  border: "1px solid rgba(245,166,35,0.24)",
-                  background: "rgba(245,166,35,0.08)",
-                  color: "var(--warm-white)",
-                  padding: "16px 18px",
-                  marginBottom: 18,
-                }}
-              >
-                Payment received. GetSponza is waiting for Stripe&apos;s webhook confirmation before unlocking the full kit on this page.
-              </div>
-            ) : null}
-
             {!isPaid ? (
               <div
                 style={{
@@ -480,44 +472,85 @@ export default function ResultsDetailClient({
               >
                 <div>
                   <p style={{ fontSize: 12, fontWeight: 700, color: "var(--gold)", letterSpacing: "0.08em", marginBottom: 6 }}>
-                    CHECKOUT EMAIL
+                    PAYMENT + UNLOCK
                   </p>
                   <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                    Use the same email at checkout so GetSponza can send the unlock confirmation for this exact kit.
+                    Open the secure payment page in a new tab. Once you&apos;ve paid, come back here and unlock this exact kit with the same email used for this analysis.
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value.trim().toLowerCase())}
-                    placeholder="you@example.com"
+                  <a
+                    href={NANO_PAYMENT_LINK}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={revealUnlockPrompt}
                     style={{
-                      width: 240,
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      background: "rgba(10,14,22,0.42)",
-                      color: "var(--warm-white)",
-                      padding: "12px 14px",
-                      fontSize: 14,
-                    }}
-                  />
-                  <button
-                    onClick={() => void handleCheckout()}
-                    disabled={checkoutPending}
-                    style={{
-                      border: "none",
+                      display: "inline-block",
                       borderRadius: 12,
                       background: "var(--gold)",
                       color: "var(--navy)",
                       fontWeight: 700,
                       padding: "12px 16px",
-                      cursor: checkoutPending ? "wait" : "pointer",
+                      cursor: "pointer",
+                      textDecoration: "none",
                     }}
                   >
-                    {checkoutPending ? "Redirecting..." : checkoutLabel}
-                  </button>
+                    {checkoutLabel}
+                  </a>
                 </div>
+                {showUnlockPrompt ? (
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                      gap: 12,
+                      alignItems: "center",
+                      paddingTop: 4,
+                    }}
+                  >
+                    <div>
+                      <p style={{ fontSize: 14, color: "var(--warm-white)", fontWeight: 700, marginBottom: 6 }}>
+                        Already paid? Enter your email to unlock your kit →
+                      </p>
+                      <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                        This unlock checks the email already saved on your kit record and marks this exact kit as paid.
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value.trim().toLowerCase())}
+                        placeholder="you@example.com"
+                        style={{
+                          width: 240,
+                          borderRadius: 12,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(10,14,22,0.42)",
+                          color: "var(--warm-white)",
+                          padding: "12px 14px",
+                          fontSize: 14,
+                        }}
+                      />
+                      <button
+                        onClick={handleManualUnlock}
+                        disabled={unlockPending}
+                        style={{
+                          border: "none",
+                          borderRadius: 12,
+                          background: "rgba(255,255,255,0.1)",
+                          color: "var(--warm-white)",
+                          fontWeight: 700,
+                          padding: "12px 16px",
+                          cursor: unlockPending ? "wait" : "pointer",
+                        }}
+                      >
+                        {unlockPending ? "Unlocking..." : "Unlock"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div
@@ -587,7 +620,7 @@ export default function ResultsDetailClient({
                   <p style={{ color: "var(--text-muted)", lineHeight: 1.6, fontSize: 14 }}>
                     {isPaid
                       ? "Your sponsorship pack is unlocked. Download the ZIP to get the PDF media kit, pitch emails, and brand list."
-                      : "The free score is visible now. The full sponsor-ready kit unlocks immediately after the Stripe payment settles."}
+                      : "The free score is visible now. Pay in a new tab, then use the unlock form on this page to reveal the full sponsor-ready kit."}
                   </p>
                 </div>
                 <div
@@ -607,8 +640,8 @@ export default function ResultsDetailClient({
                       ? kit.pack_ready_at
                         ? "Ready for download"
                         : "PDF is generated on demand"
-                      : returnedFromCheckout
-                        ? "Waiting for Stripe webhook confirmation"
+                      : showUnlockPrompt
+                        ? "Use the unlock form after payment"
                         : "Free tier only until payment completes"}
                   </p>
                   <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
@@ -778,7 +811,7 @@ export default function ResultsDetailClient({
                     </div>
                   ))}
                 </div>
-                {!isPaid ? <LockedOverlay ctaLabel={checkoutLabel} onUnlock={() => void handleCheckout()} pending={checkoutPending} /> : null}
+                {!isPaid ? <LockedOverlay ctaLabel={checkoutLabel} onPaymentClick={revealUnlockPrompt} /> : null}
               </div>
 
               <div style={{ display: "grid", gap: 24 }}>
@@ -830,7 +863,7 @@ export default function ResultsDetailClient({
                       ))}
                     </div>
                   </div>
-                  {!isPaid ? <LockedOverlay ctaLabel={checkoutLabel} onUnlock={() => void handleCheckout()} pending={checkoutPending} /> : null}
+                  {!isPaid ? <LockedOverlay ctaLabel={checkoutLabel} onPaymentClick={revealUnlockPrompt} /> : null}
                 </div>
 
                 <div
@@ -893,7 +926,7 @@ export default function ResultsDetailClient({
                     </button>
                   ) : (
                     <>
-                      <LockedOverlay ctaLabel={checkoutLabel} onUnlock={() => void handleCheckout()} pending={checkoutPending} />
+                      <LockedOverlay ctaLabel={checkoutLabel} onPaymentClick={revealUnlockPrompt} />
                       <div style={{ height: 52 }} />
                     </>
                   )}
@@ -915,7 +948,7 @@ export default function ResultsDetailClient({
                       Refresh available in 90 days — $19
                     </h2>
                     <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 18 }}>
-                      Refresh creates a brand-new kit record with the same creator URL and email, then sends it through the $19 checkout flow.
+                      Refresh creates a brand-new kit record with the same creator URL and email, then opens the same secure payment link in a new tab.
                     </p>
                     <div
                       style={{
@@ -933,7 +966,7 @@ export default function ResultsDetailClient({
                     </div>
                     <button
                       onClick={handleRefreshPurchase}
-                      disabled={!kit.refresh_eligible || refreshPending || checkoutPending}
+                      disabled={!kit.refresh_eligible || refreshPending}
                       style={{
                         width: "100%",
                         border: "none",
@@ -946,7 +979,7 @@ export default function ResultsDetailClient({
                         cursor: kit.refresh_eligible && !refreshPending ? "pointer" : "not-allowed",
                       }}
                     >
-                      {refreshPending ? "Preparing Refresh..." : "Start Refresh Checkout — $19"}
+                      {refreshPending ? "Preparing Refresh..." : "Start Refresh — $19"}
                     </button>
                   </div>
                 ) : null}

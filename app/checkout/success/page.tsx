@@ -37,9 +37,9 @@ export default function SuccessPage() {
           Your sponsorship pack is ready.
         </h1>
         <p style={{ fontSize: 16, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 36 }}>
-          If you still have your results page open, head back there and the download button should
-          unlock automatically once the payment webhook finishes processing. Pay with the same
-          email you used during analysis so GetSponza can match the order to your kit.
+          Return to your results page and use the &ldquo;Already paid?&rdquo; unlock form with the same
+          email you used during analysis. Once that email matches your kit record, GetSponza will
+          unlock the full pack on the page.
         </p>
         <div
           style={{

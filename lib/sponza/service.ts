@@ -1,6 +1,5 @@
 import { getPool } from "@/lib/db";
 import {
-  FULL_KIT_PRICE_CENTS,
   getPurchasePriceCents,
   getPurchaseType,
   getRefreshAvailableAt,
@@ -14,7 +13,6 @@ import type {
   GenerateKitInput,
   GenerateKitResponse,
   KitRecord,
-  PurchaseType,
   SponsorshipKit,
 } from "@/lib/sponza/types";
 import {
@@ -26,6 +24,25 @@ import {
 } from "@/lib/sponza/utils";
 
 const CACHE_WINDOW_SQL = `${REFRESH_WINDOW_DAYS} days`;
+const KIT_SELECT_FIELDS = `
+  id,
+  platform,
+  email,
+  url,
+  normalized_url,
+  niche_notes,
+  cache_key,
+  created_at::text,
+  COALESCE(paid, paid_at IS NOT NULL) AS paid,
+  paid_at::text,
+  pack_ready_at::text,
+  pack_last_error,
+  stripe_payment_id,
+  stripe_checkout_session_id,
+  refresh_source_kit_id,
+  full_kit_json,
+  scrape_json
+`;
 
 function buildFreeResponse(kit: SponsorshipKit): FreeSponsorshipKitPreview {
   const firstPitch = kit.pitch_emails[0];
@@ -80,10 +97,6 @@ function toKitResponse(params: {
   } as GenerateKitResponse;
 }
 
-function getKitPurchaseType(record: KitRecord): PurchaseType {
-  return getPurchaseType(record.refresh_source_kit_id);
-}
-
 async function recordSubmission(url: string, email: string | null, platform: string, nicheNotes?: string) {
   const db = getPool();
   await db.query(
@@ -131,22 +144,7 @@ async function getCachedKit(cacheKey: string) {
   const result = await db.query<KitRecord>(
     `
       SELECT
-        id,
-        platform,
-        email,
-        url,
-        normalized_url,
-        niche_notes,
-        cache_key,
-        created_at::text,
-        paid_at::text,
-        pack_ready_at::text,
-        pack_last_error,
-        stripe_payment_id,
-        stripe_checkout_session_id,
-        refresh_source_kit_id,
-        full_kit_json,
-        scrape_json
+        ${KIT_SELECT_FIELDS}
       FROM sponsorship_kits
       WHERE cache_key = $1
         AND created_at >= NOW() - INTERVAL '${CACHE_WINDOW_SQL}'
@@ -187,29 +185,15 @@ async function insertKitRecord(params: {
         email,
         scrape_json,
         full_kit_json,
+        paid,
         paid_at,
         refresh_source_kit_id,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, NOW(), NOW())
       RETURNING
-        id,
-        platform,
-        email,
-        url,
-        normalized_url,
-        niche_notes,
-        cache_key,
-        created_at::text,
-        paid_at::text,
-        pack_ready_at::text,
-        pack_last_error,
-        stripe_payment_id,
-        stripe_checkout_session_id,
-        refresh_source_kit_id,
-        full_kit_json,
-        scrape_json
+        ${KIT_SELECT_FIELDS}
     `,
     [
       params.url,
@@ -222,6 +206,7 @@ async function insertKitRecord(params: {
       params.email,
       JSON.stringify(params.scrapeJson),
       JSON.stringify(params.fullKit),
+      Boolean(params.paidAt),
       params.paidAt || null,
       params.refreshSourceKitId || null,
     ]
@@ -305,7 +290,7 @@ async function buildAndStoreKit(
 }
 
 function canUnlockPaidKitForGenerateRequest(kit: KitRecord, email: string | null) {
-  if (!kit.paid_at) {
+  if (!kit.paid) {
     return false;
   }
 
@@ -343,22 +328,7 @@ export async function getKitRecordById(kitId: number) {
   const result = await db.query<KitRecord>(
     `
       SELECT
-        id,
-        platform,
-        email,
-        url,
-        normalized_url,
-        niche_notes,
-        cache_key,
-        created_at::text,
-        paid_at::text,
-        pack_ready_at::text,
-        pack_last_error,
-        stripe_payment_id,
-        stripe_checkout_session_id,
-        refresh_source_kit_id,
-        full_kit_json,
-        scrape_json
+        ${KIT_SELECT_FIELDS}
       FROM sponsorship_kits
       WHERE id = $1
       LIMIT 1
@@ -381,28 +351,14 @@ async function markKitPaid(params: {
       UPDATE sponsorship_kits
       SET
         email = COALESCE($2, email),
+        paid = TRUE,
         paid_at = COALESCE(paid_at, NOW()),
         stripe_payment_id = COALESCE($3, stripe_payment_id),
         stripe_checkout_session_id = COALESCE($4, stripe_checkout_session_id),
         updated_at = NOW()
       WHERE id = $1
       RETURNING
-        id,
-        platform,
-        email,
-        url,
-        normalized_url,
-        niche_notes,
-        cache_key,
-        created_at::text,
-        paid_at::text,
-        pack_ready_at::text,
-        pack_last_error,
-        stripe_payment_id,
-        stripe_checkout_session_id,
-        refresh_source_kit_id,
-        full_kit_json,
-        scrape_json
+        ${KIT_SELECT_FIELDS}
     `,
     [
       params.kitId,
@@ -442,7 +398,7 @@ export async function getKitResponseById(kitId: number) {
 
   return toKitResponse({
     kit,
-    accessTier: kit.paid_at ? "paid" : "free",
+    accessTier: kit.paid ? "paid" : "free",
     cached: true,
   });
 }
@@ -450,67 +406,14 @@ export async function getKitResponseById(kitId: number) {
 export async function getPaidKitRecordById(kitId: number) {
   const kit = await getKitRecordById(kitId);
 
-  if (!kit || !kit.paid_at) {
+  if (!kit || !kit.paid) {
     return null;
   }
 
   return kit;
 }
 
-export async function getLatestPaidKitForEmail(email?: string | null) {
-  const normalizedEmail = normalizeEmail(email);
-
-  if (!normalizedEmail) {
-    return null;
-  }
-
-  const db = getPool();
-  const result = await db.query<KitRecord>(
-    `
-      SELECT
-        id,
-        platform,
-        email,
-        url,
-        normalized_url,
-        niche_notes,
-        cache_key,
-        created_at::text,
-        paid_at::text,
-        pack_ready_at::text,
-        pack_last_error,
-        stripe_payment_id,
-        stripe_checkout_session_id,
-        refresh_source_kit_id,
-        full_kit_json,
-        scrape_json
-      FROM sponsorship_kits
-      WHERE LOWER(email) = LOWER($1)
-        AND paid_at IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT 1
-    `,
-    [normalizedEmail]
-  );
-
-  return result.rows[0] || null;
-}
-
-export async function getCheckoutKitById(kitId: number) {
-  const kit = await getKitRecordById(kitId);
-
-  if (!kit) {
-    return null;
-  }
-
-  return {
-    ...kit,
-    purchase_type: getKitPurchaseType(kit),
-    purchase_price_cents: getPurchasePriceCents(kit.refresh_source_kit_id),
-  };
-}
-
-export async function recordStripeCheckoutCompletion(params: {
+export async function recordKitUnlock(params: {
   kitId: number;
   email?: string | null;
   amountCents?: number | null;
@@ -559,39 +462,54 @@ export async function recordStripeCheckoutCompletion(params: {
   return paidKit;
 }
 
-export async function recordPaymentUnlock(params: {
-  email?: string | null;
-  amount_cents?: number | null;
-  currency?: string | null;
-  stripe_session_id?: string | null;
-}) {
+export async function unlockKitByEmail(params: { kitId: number; email: string }) {
   const normalizedEmail = normalizeEmail(params.email);
 
   if (!normalizedEmail) {
-    return false;
+    throw new Error("A valid email is required");
   }
 
-  const db = getPool();
-  await db.query(
-    `
-      INSERT INTO payment_unlocks (email, amount_cents, currency, stripe_session_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
-      ON CONFLICT DO NOTHING
-    `,
-    [normalizedEmail, params.amount_cents || FULL_KIT_PRICE_CENTS, params.currency || "usd", params.stripe_session_id || null]
-  );
+  const kit = await getKitRecordById(params.kitId);
 
-  await db.query(
-    `
-      UPDATE sponsorship_kits
-      SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
-      WHERE LOWER(email) = LOWER($1)
-        AND paid_at IS NULL
-    `,
-    [normalizedEmail]
-  );
+  if (!kit) {
+    return {
+      status: "not_found" as const,
+      kit: null,
+    };
+  }
 
-  return true;
+  if (!kit.email || normalizeEmail(kit.email) !== normalizedEmail) {
+    return {
+      status: "email_mismatch" as const,
+      kit,
+    };
+  }
+
+  if (kit.paid) {
+    return {
+      status: "already_paid" as const,
+      kit,
+    };
+  }
+
+  const paidKit = await recordKitUnlock({
+    kitId: kit.id,
+    email: normalizedEmail,
+    amountCents: getPurchasePriceCents(kit.refresh_source_kit_id),
+    currency: "usd",
+  });
+
+  if (!paidKit) {
+    return {
+      status: "not_found" as const,
+      kit: null,
+    };
+  }
+
+  return {
+    status: "unlocked" as const,
+    kit: paidKit,
+  };
 }
 
 export async function createRefreshKit(sourceKitId: number) {
@@ -601,7 +519,7 @@ export async function createRefreshKit(sourceKitId: number) {
     throw new Error("Original kit not found");
   }
 
-  if (!sourceKit.paid_at) {
+  if (!sourceKit.paid) {
     throw new Error("Only paid kits can be refreshed");
   }
 

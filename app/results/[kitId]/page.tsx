@@ -7,7 +7,7 @@ export default async function ResultDetailPage({
   searchParams,
 }: {
   params: Promise<{ kitId: string }>;
-  searchParams: Promise<{ paid?: string }>;
+  searchParams: Promise<{ unlock?: string }>;
 }) {
   const [{ kitId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const numericKitId = Number(kitId);
@@ -19,7 +19,7 @@ export default async function ResultDetailPage({
   return (
     <ResultsDetailClient
       kitId={numericKitId}
-      returnedFromCheckout={resolvedSearchParams.paid === "true"}
+      initialUnlockPromptOpen={resolvedSearchParams.unlock === "1"}
     />
   );
 }

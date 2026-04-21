@@ -34,7 +34,7 @@ export default function HomePage() {
     }
 
     if (email.trim() && !EMAIL_PATTERN.test(email.trim())) {
-      setError("Enter a valid email if you want GetSponza to unlock your paid pack automatically.");
+      setError("Enter a valid email if you want GetSponza to match your paid kit later.");
       return;
     }
 
@@ -340,7 +340,7 @@ export default function HomePage() {
               <p style={{ color: "#FF6B6B", fontSize: 13, marginTop: 8 }}>{error}</p>
             )}
             <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10 }}>
-              Add the same email you&rsquo;ll use at checkout if you want the paid sponsorship pack to unlock on the results page automatically.
+              Add the same email you&rsquo;ll use to pay if you want the paid sponsorship pack to unlock from the results page.
             </p>
           </form>
 
