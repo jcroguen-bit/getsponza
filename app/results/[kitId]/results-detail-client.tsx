@@ -292,7 +292,7 @@ export default function ResultsDetailClient({
   const kit = state.data;
   const creator = kit?.creator_profile;
   const isPaid = kit?.access_tier === "paid";
-  const checkoutLabel = `Get Your Full Kit — ${formatCurrency(kit?.purchase_price_cents)}`;
+  const checkoutLabel = `Get Your Full Kit — ${formatCurrency((kit?.purchase_price_cents ?? 0) / 100)}`;
 
   return (
     <main
@@ -786,7 +786,7 @@ export default function ResultsDetailClient({
                     </h2>
                   </div>
                 </div>
-                <div style={{ display: "grid", gap: 12, filter: isPaid ? "none" : "blur(6px)" }}>
+                <div style={{ display: "grid", gap: 12 }}>
                   {kit.brand_matches.map((brand) => (
                     <div
                       key={`${brand.brand}-${brand.contact_route}`}
@@ -810,6 +810,27 @@ export default function ResultsDetailClient({
                       <p style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>{brand.why_match}</p>
                     </div>
                   ))}
+                  {!isPaid && (kit.brand_matches_remaining ?? 0) > 0 && (
+                    <div
+                      style={{
+                        borderRadius: 18,
+                        background: "rgba(13,21,34,0.72)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        padding: "18px 18px 16px",
+                        filter: "blur(5px)",
+                        userSelect: "none",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                        <div>
+                          <p style={{ fontSize: 18, fontWeight: 800, color: "var(--warm-white)" }}>+{kit.brand_matches_remaining} more brands</p>
+                          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Various categories · Multiple tiers</p>
+                        </div>
+                      </div>
+                      <p style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>Unlock the full kit to reveal all matched brands with contact routes and pitch context.</p>
+                    </div>
+                  )}
                 </div>
                 {!isPaid ? <LockedOverlay ctaLabel={checkoutLabel} onPaymentClick={revealUnlockPrompt} /> : null}
               </div>
@@ -887,7 +908,7 @@ export default function ResultsDetailClient({
                       ? "Download a single ZIP that includes your designed PDF media kit, all pitch emails, and the complete sponsor contact list."
                       : "Upgrade to unlock the professionally designed PDF media kit, the full outreach pack, and the sponsor contact CSV."}
                   </p>
-                  <div style={{ filter: isPaid ? "none" : "blur(6px)" }}>
+                  <div>
                     <div
                       style={{
                         borderRadius: 18,
@@ -904,6 +925,11 @@ export default function ResultsDetailClient({
                       <p style={{ color: "var(--text-muted)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
                         {kit.pitch_emails[0]?.body || "Your custom outreach copy will appear here."}
                       </p>
+                      {!isPaid && (
+                        <p style={{ filter: "blur(5px)", color: "var(--text-muted)", lineHeight: 1.7, userSelect: "none", marginTop: 8 }}>
+                          {"The complete email continues with personalized details, a specific partnership proposal, and a clear call to action tailored for this brand."}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {isPaid ? (

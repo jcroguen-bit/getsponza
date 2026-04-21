@@ -816,7 +816,7 @@ export default function HomePage() {
             {[
               { label: "How it works", href: "#" },
               { label: "Pricing", href: "#analysis-form" },
-              { label: "Privacy", href: "#" },
+              { label: "Privacy", href: "/privacy" },
               { label: "Contact", href: "mailto:sponza@nanocorp.app" },
             ].map((link) => (
               <a
