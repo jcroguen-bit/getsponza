@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const PAYMENT_LINK = "https://buy.stripe.com/aFaeVe3He16v6iC2SneP03g";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function StarRating() {
@@ -41,8 +40,9 @@ export default function HomePage() {
 
     setError("");
     setLoading(true);
+
     try {
-      await fetch("/api/submit", {
+      const response = await fetch("/api/generate-kit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -51,22 +51,18 @@ export default function HomePage() {
           niche_notes: nicheNotes.trim() || undefined,
         }),
       });
-    } catch {}
-    setTimeout(() => {
-      const nextParams = new URLSearchParams({
-        url: url.trim(),
-      });
 
-      if (email.trim()) {
-        nextParams.set("email", email.trim().toLowerCase());
+      const payload = (await response.json()) as { kit_id?: number; error?: string };
+
+      if (!response.ok || !payload.kit_id) {
+        throw new Error(payload.error || "We couldn't analyze this URL.");
       }
 
-      if (nicheNotes.trim()) {
-        nextParams.set("niche", nicheNotes.trim());
-      }
-
-      router.push(`/results?${nextParams.toString()}`);
-    }, 800);
+      router.push(`/results/${payload.kit_id}`);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "We couldn't analyze this URL.");
+      setLoading(false);
+    }
   };
 
   const faqs = [
@@ -151,9 +147,7 @@ export default function HomePage() {
             Sponza
           </div>
           <a
-            href={PAYMENT_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#analysis-form"
             style={{
               background: "var(--gold)",
               color: "var(--navy)",
@@ -251,7 +245,7 @@ export default function HomePage() {
           </p>
 
           {/* URL Input */}
-          <form onSubmit={handleSubmit} className="fade-in fade-in-delay-4" style={{ marginBottom: 24 }}>
+          <form id="analysis-form" onSubmit={handleSubmit} className="fade-in fade-in-delay-4" style={{ marginBottom: 24 }}>
             <div
               style={{
                 display: "grid",
@@ -821,7 +815,7 @@ export default function HomePage() {
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
             {[
               { label: "How it works", href: "#" },
-              { label: "Pricing", href: PAYMENT_LINK },
+              { label: "Pricing", href: "#analysis-form" },
               { label: "Privacy", href: "#" },
               { label: "Contact", href: "mailto:hello@sponza.app" },
             ].map((link) => (

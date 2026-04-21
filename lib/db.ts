@@ -51,6 +51,9 @@ export async function ensureDatabase() {
         scrape_json JSONB,
         full_kit_json JSONB NOT NULL,
         paid_at TIMESTAMPTZ,
+        stripe_payment_id TEXT,
+        stripe_checkout_session_id TEXT,
+        refresh_source_kit_id BIGINT REFERENCES sponsorship_kits(id) ON DELETE SET NULL,
         pack_ready_at TIMESTAMPTZ,
         pack_last_error TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -61,10 +64,12 @@ export async function ensureDatabase() {
     await db.query(`
       CREATE TABLE IF NOT EXISTS payment_unlocks (
         id BIGSERIAL PRIMARY KEY,
+        kit_id BIGINT REFERENCES sponsorship_kits(id) ON DELETE SET NULL,
         email TEXT NOT NULL,
         amount_cents INTEGER,
         currency TEXT,
         stripe_session_id TEXT,
+        stripe_payment_id TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
@@ -99,6 +104,9 @@ export async function ensureDatabase() {
       ADD COLUMN IF NOT EXISTS email TEXT,
       ADD COLUMN IF NOT EXISTS scrape_json JSONB,
       ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS stripe_payment_id TEXT,
+      ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT,
+      ADD COLUMN IF NOT EXISTS refresh_source_kit_id BIGINT REFERENCES sponsorship_kits(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS pack_ready_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS pack_last_error TEXT,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -106,9 +114,11 @@ export async function ensureDatabase() {
 
     await db.query(`
       ALTER TABLE payment_unlocks
+      ADD COLUMN IF NOT EXISTS kit_id BIGINT REFERENCES sponsorship_kits(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS amount_cents INTEGER,
       ADD COLUMN IF NOT EXISTS currency TEXT,
       ADD COLUMN IF NOT EXISTS stripe_session_id TEXT,
+      ADD COLUMN IF NOT EXISTS stripe_payment_id TEXT,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
     `);
 
@@ -121,8 +131,12 @@ export async function ensureDatabase() {
     `);
 
     await db.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_kits_cache_key_idx
-      ON sponsorship_kits (cache_key)
+      DROP INDEX IF EXISTS sponsorship_kits_cache_key_idx
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS sponsorship_kits_cache_key_idx
+      ON sponsorship_kits (cache_key, created_at DESC)
     `);
 
     await db.query(`
@@ -131,14 +145,23 @@ export async function ensureDatabase() {
     `);
 
     await db.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS payment_unlocks_email_idx
-      ON payment_unlocks (email)
+      DROP INDEX IF EXISTS payment_unlocks_email_idx
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS payment_unlocks_email_idx
+      ON payment_unlocks (email, created_at DESC)
     `);
 
     await db.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS payment_unlocks_session_idx
       ON payment_unlocks (stripe_session_id)
       WHERE stripe_session_id IS NOT NULL
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS sponsorship_kits_refresh_source_idx
+      ON sponsorship_kits (refresh_source_kit_id)
     `);
   })().catch((error) => {
     initPromise = null;

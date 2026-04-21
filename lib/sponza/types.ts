@@ -1,6 +1,7 @@
 export type Platform = "youtube" | "instagram" | "tiktok" | "unknown";
 
 export type AccessTier = "free" | "paid";
+export type PurchaseType = "full_kit" | "refresh";
 
 export interface RecentVideo {
   title: string;
@@ -97,9 +98,14 @@ export interface FreeSponsorshipKitPreview {
 
 export interface KitResponseMeta {
   kit_id: number;
+  email: string | null;
   last_analyzed: string;
   cached: boolean;
   pack_ready_at: string | null;
+  refresh_eligible: boolean;
+  refresh_available_at: string;
+  purchase_type: PurchaseType;
+  purchase_price_cents: number;
 }
 
 export type PaidKitResponse = SponsorshipKit &
@@ -128,10 +134,15 @@ export interface KitRecord {
   email: string | null;
   url: string;
   normalized_url: string | null;
+  niche_notes: string | null;
+  cache_key: string | null;
   created_at: string;
   paid_at: string | null;
   pack_ready_at: string | null;
   pack_last_error: string | null;
+  stripe_payment_id: string | null;
+  stripe_checkout_session_id: string | null;
+  refresh_source_kit_id: number | null;
   full_kit_json: SponsorshipKit;
   scrape_json: ScrapeResult | null;
 }
