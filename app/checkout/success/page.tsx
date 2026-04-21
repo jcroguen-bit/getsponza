@@ -39,7 +39,7 @@ export default function SuccessPage() {
         <p style={{ fontSize: 16, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 36 }}>
           If you still have your results page open, head back there and the download button should
           unlock automatically once the payment webhook finishes processing. Pay with the same
-          email you used during analysis so Sponza can match the order to your kit.
+          email you used during analysis so GetSponza can match the order to your kit.
         </p>
         <div
           style={{
@@ -78,7 +78,7 @@ export default function SuccessPage() {
             textDecoration: "none",
           }}
         >
-          ← Back to Sponza
+          ← Back to GetSponza
         </Link>
       </div>
     </main>

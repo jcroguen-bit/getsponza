@@ -293,7 +293,7 @@ function buildResearchPrompt(input: GenerateKitInput, scrape: ScrapeResult) {
   };
 
   return `
-You are Sponza's sponsorship research team. Produce a polished creator sponsorship kit that reads as if it was written by an experienced sponsorship manager.
+You are GetSponza's sponsorship research team. Produce a polished creator sponsorship kit that reads as if it was written by an experienced sponsorship manager.
 
 Hard requirements:
 - Return JSON only.

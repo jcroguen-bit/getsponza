@@ -34,7 +34,7 @@ export default function HomePage() {
     }
 
     if (email.trim() && !EMAIL_PATTERN.test(email.trim())) {
-      setError("Enter a valid email if you want Sponza to unlock your paid pack automatically.");
+      setError("Enter a valid email if you want GetSponza to unlock your paid pack automatically.");
       return;
     }
 
@@ -95,21 +95,21 @@ export default function HomePage() {
   const testimonials = [
     {
       quote:
-        "Landed a $1,200 deal with a skincare brand within 2 weeks of using Sponza. The pitch email was so polished — the brand rep said it was the most professional outreach they'd received from a creator.",
+        "Landed a $1,200 deal with a skincare brand within 2 weeks of using GetSponza. The pitch email was so polished — the brand rep said it was the most professional outreach they'd received from a creator.",
       name: "Jake T.",
       stats: "87K followers · Lifestyle",
       avatar: "JT",
     },
     {
       quote:
-        "I'd been trying to get brand deals for a year with no luck. Sponza matched me with 3 brands I'd never heard of — but they were perfect fits. One of them became a 6-month partnership.",
+        "I'd been trying to get brand deals for a year with no luck. GetSponza matched me with 3 brands I'd never heard of — but they were perfect fits. One of them became a 6-month partnership.",
       name: "Priya M.",
       stats: "52K followers · Beauty",
       avatar: "PM",
     },
     {
       quote:
-        "The media kit alone was worth it. I used to cobble together a PDF in Canva. Now I just share the Sponza kit and the response rate is night and day.",
+        "The media kit alone was worth it. I used to cobble together a PDF in Canva. Now I just share the GetSponza kit and the response rate is night and day.",
       name: "Marcus B.",
       stats: "124K followers · Fitness",
       avatar: "MB",
@@ -144,7 +144,7 @@ export default function HomePage() {
             className="font-display"
             style={{ fontSize: 22, fontWeight: 800, color: "var(--gold)", letterSpacing: "-0.02em" }}
           >
-            Sponza
+            GetSponza
           </div>
           <a
             href="#analysis-form"
@@ -810,14 +810,14 @@ export default function HomePage() {
             className="font-display"
             style={{ fontSize: 20, fontWeight: 800, color: "var(--gold)" }}
           >
-            Sponza
+            GetSponza
           </div>
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
             {[
               { label: "How it works", href: "#" },
               { label: "Pricing", href: "#analysis-form" },
               { label: "Privacy", href: "#" },
-              { label: "Contact", href: "mailto:hello@sponza.app" },
+              { label: "Contact", href: "mailto:sponza@nanocorp.app" },
             ].map((link) => (
               <a
                 key={link.label}
@@ -828,7 +828,7 @@ export default function HomePage() {
               </a>
             ))}
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>© 2026 Sponza. All rights reserved.</p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>© 2026 GetSponza. All rights reserved.</p>
         </div>
       </footer>
     </main>

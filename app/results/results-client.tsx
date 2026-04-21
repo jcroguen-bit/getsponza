@@ -93,7 +93,7 @@ export default function ResultsClient() {
         <p style={{ fontSize: 16, color: "var(--text-muted)", lineHeight: 1.7 }}>
           {submittedUrl
             ? state.loading
-            ? "Sponza is analyzing your creator profile and assigning the result to a persistent kit ID."
+            ? "GetSponza is analyzing your creator profile and assigning the result to a persistent kit ID."
             : state.error
             : "Missing creator URL. Start a new analysis from the homepage."}
         </p>

@@ -196,7 +196,7 @@ export default function ResultsDetailClient({
     if (!checkoutEmail || !EMAIL_PATTERN.test(checkoutEmail)) {
       setState((current) => ({
         ...current,
-        error: "Enter a valid email before checkout so Sponza can send your unlock confirmation.",
+        error: "Enter a valid email before checkout so GetSponza can send your unlock confirmation.",
       }));
       return;
     }
@@ -247,7 +247,7 @@ export default function ResultsDetailClient({
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
-      anchor.download = "sponza-sponsorship-pack.zip";
+      anchor.download = "getsponza-sponsorship-pack.zip";
       anchor.click();
       URL.revokeObjectURL(downloadUrl);
     } catch (error) {
@@ -322,7 +322,7 @@ export default function ResultsDetailClient({
           }}
         >
           <Link href="/" className="font-display" style={{ fontSize: 22, fontWeight: 800, color: "var(--gold)", textDecoration: "none" }}>
-            Sponza
+            GetSponza
           </Link>
           {isPaid ? (
             <button
@@ -412,7 +412,7 @@ export default function ResultsDetailClient({
             </h1>
 
             <p style={{ maxWidth: 620, fontSize: 16, lineHeight: 1.7, color: "var(--text-muted)", marginBottom: 24 }}>
-              Sponza analyzed this creator profile, surfaced the free readiness score, and can unlock the full sponsor-ready pack after checkout.
+              GetSponza analyzed this creator profile, surfaced the free readiness score, and can unlock the full sponsor-ready pack after checkout.
             </p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 26 }}>
@@ -461,7 +461,7 @@ export default function ResultsDetailClient({
                   marginBottom: 18,
                 }}
               >
-                Payment received. Sponza is waiting for Stripe&apos;s webhook confirmation before unlocking the full kit on this page.
+                Payment received. GetSponza is waiting for Stripe&apos;s webhook confirmation before unlocking the full kit on this page.
               </div>
             ) : null}
 
@@ -483,7 +483,7 @@ export default function ResultsDetailClient({
                     CHECKOUT EMAIL
                   </p>
                   <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                    Use the same email at checkout so Sponza can send the unlock confirmation for this exact kit.
+                    Use the same email at checkout so GetSponza can send the unlock confirmation for this exact kit.
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>

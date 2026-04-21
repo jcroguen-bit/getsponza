@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const cancelUrl = new URL(`/results/${kit.id}`, req.nextUrl.origin).toString();
     const productName =
       kit.purchase_type === "refresh"
-        ? "GetSponza Sponsorship Kit Refresh"
+        ? "GetSponza Kit Refresh"
         : "GetSponza Sponsorship Kit";
 
     const session = await stripe.checkout.sessions.create({
