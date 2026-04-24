@@ -1,48 +1,97 @@
+import type { Metadata } from "next";
+
+import LegalPageShell, { type LegalSection } from "@/app/legal-page-shell";
+
+const sections: LegalSection[] = [
+  {
+    title: "What data we collect",
+    body: (
+      <>
+        <p style={{ margin: 0 }}>
+          We keep the basics needed to build and deliver your kit: the YouTube channel URL you submit, the email
+          address tied to your kit, and lightweight usage analytics that show us which parts of GetSponza are being
+          used.
+        </p>
+        <p style={{ margin: 0 }}>
+          We do not ask for your passwords or direct account access. GetSponza is designed to work from public creator
+          data plus the details you choose to enter.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "How we use it",
+    body: (
+      <>
+        <p style={{ margin: 0 }}>
+          Your channel URL is used to generate your sponsorship kit, including the score, brand matches, and kit
+          assets. Your email address is used to deliver your purchase and any follow-up materials tied to that kit.
+        </p>
+        <p style={{ margin: 0 }}>
+          Usage analytics help us understand product performance, improve the creator experience, and catch broken
+          flows before they affect more people.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "Data retention",
+    body: (
+      <>
+        <p style={{ margin: 0 }}>
+          Sponsorship kit data is stored for 90 days so you can revisit your results, unlock your purchase, and refresh
+          your materials if needed.
+        </p>
+        <p style={{ margin: 0 }}>After that, the stored kit data is deleted from our active system.</p>
+      </>
+    ),
+  },
+  {
+    title: "Third-party services",
+    body: (
+      <>
+        <p style={{ margin: 0 }}>
+          GetSponza relies on a few partners to operate the product: OpenAI for analysis, Resend for email delivery,
+          Neon for storage, and Stripe for payment processing.
+        </p>
+        <p style={{ margin: 0 }}>
+          Those services only get the data needed to do their job, and we do not sell creator data to advertisers or
+          data brokers.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "Contact",
+    body: (
+      <p style={{ margin: 0 }}>
+        Questions about privacy, deletion, or support can be sent to{" "}
+        <a href="mailto:sponza@nanocorp.app" style={{ color: "var(--gold)" }}>
+          sponza@nanocorp.app
+        </a>
+        .
+      </p>
+    ),
+  },
+];
+
+export const metadata: Metadata = {
+  title: "Privacy Policy — GetSponza",
+  description: "GetSponza Privacy Policy — how we collect, use, and protect your data.",
+  openGraph: {
+    title: "Privacy Policy — GetSponza",
+    description: "GetSponza Privacy Policy — how we collect, use, and protect your data.",
+    type: "article",
+  },
+};
+
 export default function PrivacyPage() {
   return (
-    <main style={{ background: "var(--navy)", minHeight: "100vh", padding: "80px 24px" }}>
-      <div style={{ maxWidth: 700, margin: "0 auto" }}>
-        <a
-          href="/"
-          style={{ fontSize: 13, color: "var(--gold)", textDecoration: "none", display: "inline-block", marginBottom: 32 }}
-        >
-          ← Back to GetSponza
-        </a>
-        <h1
-          className="font-display"
-          style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: 32 }}
-        >
-          Privacy Policy
-        </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 40 }}>Last updated: April 2026</p>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 32, color: "var(--text-muted)", lineHeight: 1.7 }}>
-          <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--warm-white)", marginBottom: 12 }}>What We Collect</h2>
-            <p>When you use GetSponza, we collect the public channel URL you submit and, optionally, your email address if you provide it. We also collect publicly available data from your social media profiles (follower count, engagement rate, content categories) to generate your sponsorship report.</p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--warm-white)", marginBottom: 12 }}>How We Use It</h2>
-            <p>Your channel URL and public data are used solely to generate your Sponsorship Readiness Score and brand match report. If you provide an email address, we use it to deliver your paid kit and send transactional emails related to your order. We do not sell your data to third parties.</p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--warm-white)", marginBottom: 12 }}>Data Retention</h2>
-            <p>Kit records are stored in our database to allow you to access your results and unlock paid content. You may request deletion of your data at any time by contacting us at sponza@nanocorp.app.</p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--warm-white)", marginBottom: 12 }}>Cookies</h2>
-            <p>GetSponza does not use tracking cookies. We use essential session storage only to maintain your in-page state.</p>
-          </section>
-
-          <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--warm-white)", marginBottom: 12 }}>Contact</h2>
-            <p>Questions about this policy? Email us at <a href="mailto:sponza@nanocorp.app" style={{ color: "var(--gold)" }}>sponza@nanocorp.app</a>.</p>
-          </section>
-        </div>
-      </div>
-    </main>
+    <LegalPageShell
+      eyebrow="Privacy"
+      title="Privacy Policy — GetSponza"
+      intro="We built GetSponza for creators, not for harvesting data. This page explains what we collect, why we collect it, and how long we keep it in plain English."
+      sections={sections}
+    />
   );
 }

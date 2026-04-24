@@ -292,7 +292,7 @@ export default function ResultsDetailClient({
   const kit = state.data;
   const creator = kit?.creator_profile;
   const isPaid = kit?.access_tier === "paid";
-  const checkoutLabel = `Get Your Full Kit — ${formatCurrency((kit?.purchase_price_cents ?? 0) / 100)}`;
+  const checkoutLabel = "Get Your Full Kit — $29";
 
   return (
     <main
